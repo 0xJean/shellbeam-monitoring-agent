@@ -34,6 +34,10 @@ jobs:
           cache: true
       - name: Test, vet, build, and collect licenses
         run: make check artifacts
+      - name: Check integration tool syntax
+        run: |
+          python3 -m py_compile scripts/agent-server-smoke.py scripts/collect-third-party-notices.py
+          node --check scripts/managed-lifecycle-smoke.mjs
       - name: Verify compatibility aliases and build identity
         shell: bash
         run: |

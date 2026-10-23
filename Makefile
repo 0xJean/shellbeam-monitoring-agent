@@ -34,7 +34,7 @@ artifacts: build notices
 	cp "$(DIST)/shellbeam-monitoring-agent$(EXE)" "$(DIST)/$(BRANDED_ASSET)"
 	cp readme.md README_zh-cn.md "$(DIST)/"
 	mkdir -p "$(DIST)/docs"
-	cp docs/integration.md docs/releases.md docs/management.md "$(DIST)/docs/"
+	cp docs/integration.md docs/releases.md docs/management.md docs/validation.md "$(DIST)/docs/"
 
 clean:
 	rm -rf "$(DIST)"

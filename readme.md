@@ -1,6 +1,6 @@
 # ShellBeam Monitoring Agent
 
-[简体中文](README_zh-cn.md) · [Integration contract](docs/integration.md) · [Release process](docs/releases.md)
+[简体中文](README_zh-cn.md) · [Integration contract](docs/integration.md) · [Release process](docs/releases.md) · [Validation](docs/validation.md)
 
 ShellBeam Monitoring Agent reports host metrics to [ShellBeam Server](https://github.com/0xJean/shellbeam-server).
 It is an independent MIT-licensed fork of Komari Agent `1.5.11`, pinned to
