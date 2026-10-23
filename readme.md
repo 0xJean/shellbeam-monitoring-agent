@@ -1,70 +1,96 @@
-# komari-agent
+# ShellBeam Monitoring Agent
 
-## 配置方式
+[简体中文](README_zh-cn.md) · [Integration contract](docs/integration.md) · [Release process](docs/releases.md) · [Validation](docs/validation.md)
 
-agent 参数可以通过命令行参数、环境变量或 JSON 配置文件传入。
+ShellBeam Monitoring Agent reports host metrics to [ShellBeam Server](https://github.com/0xJean/shellbeam-server).
+It is an independent MIT-licensed fork of Komari Agent `1.5.11`, pinned to
+`c7bafb79b1a73ed9e14e2c248ae4d4163e506036`. The fork reports version `1.5.12`
+to support upgrades from existing `1.5.11` probes. See [UPSTREAM.md](UPSTREAM.md).
 
-最小启动示例：
+The existing Komari protocol, flags, environment variables and JSON keys remain
+compatible with ShellBeam Server's `1.6.0` API baseline. The local Rust
+`shellbeam-agent` is a separate ShellBeam component. Server plugins remain in
+the existing ShellBeam application workspace.
 
-```bash
-./komari-agent --endpoint "https://example.com" --token "your-token"
+## Build and identify
+
+Use Go 1.25 or newer, GNU make and Python 3:
+
+```sh
+make check build
+./dist/shellbeam-monitoring-agent --version
+./dist/shellbeam-monitoring-agent --build-info
 ```
 
-使用环境变量：
+`make artifacts` also produces identical branded and legacy platform aliases
+and collects third-party license texts. `./build_all.sh` builds supported Linux,
+Windows, macOS and FreeBSD targets. CI runs native Linux amd64/arm64 tests and
+cross-builds the other supported targets; a cross-build alone does not verify
+OS-specific runtime behavior.
 
-```bash
-export AGENT_ENDPOINT="https://example.com"
-export AGENT_TOKEN="your-token"
-./komari-agent
-```
+## Connect to ShellBeam Server
 
-使用 JSON 配置文件：
-
-```bash
-./komari-agent --config ./config.json
-```
-
-`config.json` 示例：
+A JSON config avoids putting the token in shell history or the process command
+line. Create it with permissions restricted to the service user:
 
 ```json
 {
-  "endpoint": "https://example.com",
-  "token": "your-token",
+  "endpoint": "https://monitor.example.com",
+  "token": "replace-with-node-token",
   "interval": 3,
-  "disable_auto_update": false,
-  "disable_web_ssh": false,
+  "disable_auto_update": true,
+  "disable_web_ssh": true,
   "ignore_unsafe_cert": false
 }
 ```
 
-配置优先级从低到高为：默认值、命令行参数、环境变量、JSON 配置文件。
-
-常用配置项：
-
-表中支持版本表示该参数本身首次在发布 tag 中出现；环境变量和 JSON 配置文件方式从 `1.1.33` 起支持，早于最早 tag 的参数记为 `0.0.9`。
-
-| JSON 字段 | 环境变量 | 命令行参数 | 说明 | 支持版本 |
-| --- | --- | --- | --- | --- |
-| `endpoint` | `AGENT_ENDPOINT` | `--endpoint`, `-e` | 面板地址 | `0.0.9` |
-| `token` | `AGENT_TOKEN` | `--token`, `-t` | agent token | `0.0.9` |
-| `interval` | `AGENT_INTERVAL` | `--interval`, `-i` | 数据采集间隔，单位秒 | `0.0.9` |
-| `disable_auto_update` | `AGENT_DISABLE_AUTO_UPDATE` | `--disable-auto-update` | 禁用自动更新 | `0.0.9` |
-| `disable_web_ssh` | `AGENT_DISABLE_WEB_SSH` | `--disable-web-ssh` | 禁用远程控制 | `0.0.9` |
-| `ignore_unsafe_cert` | `AGENT_IGNORE_UNSAFE_CERT` | `--ignore-unsafe-cert`, `-u` | 忽略不安全证书 | `0.0.9` |
-| `include_nics` | `AGENT_INCLUDE_NICS` | `--include-nics` | 仅统计指定网卡，逗号分隔 | `0.0.22` |
-| `exclude_nics` | `AGENT_EXCLUDE_NICS` | `--exclude-nics` | 排除指定网卡，逗号分隔 | `0.0.22` |
-| `include_mountpoints` | `AGENT_INCLUDE_MOUNTPOINTS` | `--include-mountpoint` | 仅统计指定挂载点，分号分隔 | `0.1.0` |
-| `month_rotate` | `AGENT_MONTH_ROTATE` | `--month-rotate` | 流量统计每月重置日期，`0` 为禁用 | `0.1.0` |
-| `auto_discovery_key` | `AGENT_AUTO_DISCOVERY_KEY` | `--auto-discovery` | 自动发现密钥 | `1.0.40` |
-| `custom_dns` | `AGENT_CUSTOM_DNS` | `--custom-dns` | 自定义 DNS 服务器 | `1.0.80` |
-| `enable_gpu` | `AGENT_ENABLE_GPU` | `--gpu` | 启用详细 GPU 监控 | `1.0.80` |
-| `disable_compression` | `AGENT_DISABLE_COMPRESSION` | `--disable-compression` | 禁用 v2 传输压缩 | `1.2.10` |
-| `prefer_ip_version` | `AGENT_PREFER_IP_VERSION` | `--prefer-ip-version` | 优先使用 IP 版本，可选 `4` 或 `6` | 未发布 |
-
-完整参数可运行：
-
-```bash
-./komari-agent --help
+```sh
+chmod 600 /absolute/path/to/agent.json
+./dist/shellbeam-monitoring-agent --config /absolute/path/to/agent.json
 ```
 
-详见 `cmd/flags/flags.go` 及 `cmd/root.go`
+`disable_web_ssh: true` disables the agent remote-control channel. Set the value
+according to your deployment policy. For App-managed deployments, keep the
+existing generated configuration and service identity rather than creating a
+second service.
+
+The existing configuration precedence is retained, from lowest to highest:
+defaults, CLI flags, `AGENT_*` environment variables, JSON config. For example,
+`AGENT_ENDPOINT` and `AGENT_TOKEN` still work. Run `--help` for all flags; JSON
+and environment mappings are defined in [`cmd/flags/flag.go`](cmd/flags/flag.go).
+
+## Managed installation and updates
+
+Use ShellBeam's signed monitoring-probe management flow for managed Linux
+hosts. This fork does not provide a new host service installer. The informational
+`install.sh` / `install.ps1` scripts do not change the host.
+
+The App catalog retains runtime `komari`, numeric `1.5.x` versions, existing
+service paths and legacy binary aliases. Creating this repository does not
+promote a binary into the App's trusted feed. Signed promotion, URL allowlisting,
+checksums, version pins and live lifecycle acceptance are covered in
+[the integration contract](docs/integration.md).
+
+For standalone use, the self-updater targets this fork's repository. Managed
+and container deployments must keep `disable_auto_update` enabled and use their
+own verified upgrade/rollback flow.
+
+## Container
+
+```sh
+docker build -t shellbeam-monitoring-agent:local .
+docker run --rm shellbeam-monitoring-agent:local --build-info
+```
+
+The image runs as UID/GID `10001`, includes CA certificates and defaults to
+`--help`. It does not receive host mounts or privileges automatically. Without
+explicit host access it reports the container's view of the system. Host-level
+metrics and privileged operations depend on the operator's mounts and access.
+`AGENT_DISABLE_AUTO_UPDATE=true` is set in the image; JSON config takes precedence,
+so keep `disable_auto_update: true` there too. Update containers by replacing the
+image. The legacy `/.komari-agent-container` marker is retained.
+
+## License
+
+MIT. Original Komari copyright is retained in [LICENSE](LICENSE). Distributions
+include [NOTICE](NOTICE), upstream provenance and collected dependency licenses.

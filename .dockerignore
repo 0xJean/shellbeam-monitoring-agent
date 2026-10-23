@@ -1,0 +1,20 @@
+# Preserve .git so local builds can embed the exact source commit.
+dist
+build
+__debug*
+__pycache__
+.env
+.env.*
+.codex
+.vscode
+*.test
+*.out
+agent.json
+config.json
+auto-discovery.json
+fake-agent-client.json
+net_static.json
+komari-agent
+komari-agent.exe
+shellbeam-monitoring-agent
+shellbeam-monitoring-agent.exe

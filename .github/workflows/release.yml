@@ -1,66 +1,159 @@
-name: Release Binaries
+name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v1.5.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v1.5.<patch> tag (empty builds the selected ref as workflow artifacts)'
+        type: string
+        default: ''
+      draft_release:
+        description: 'Create a draft release for that existing version tag'
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-attach:
-    if: ${{ !github.event.release.prerelease }}
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        exclude:
-          - goos: windows
-            goarch: arm
-          - goos: darwin
-            goarch: 386
-          - goos: darwin
-            goarch: arm
-        include:
-          - goos: linux
-            goarch: loong64
-        goos: [windows, linux, darwin, freebsd]
-        goarch: [amd64, arm64, 386, arm]
-
+  identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.version.outputs.commit }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
         with:
-          go-version-file: go.mod
-
-      - name: Build binary
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Resolve the checked-out release identity
+        id: version
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-          VERSION: ${{ github.event.release.tag_name }}
-        run: |
-          BINARY_NAME=komari-agent-${{ matrix.goos }}-${{ matrix.goarch }}
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY_NAME=${BINARY_NAME}.exe
-          elif [ "${{ matrix.goos }}" = "darwin" ]; then
-            # macOS binaries typically do not have a file extension
-            true
-          fi
-            go build -trimpath -ldflags="-X github.com/komari-monitor/komari-agent/update.CurrentVersion=${VERSION}" -o $BINARY_NAME
-
-      - name: Upload binary to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BINARY_NAME=komari-agent-${{ matrix.goos }}-${{ matrix.goarch }}
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY_NAME=${BINARY_NAME}.exe
-          elif [ "${{ matrix.goos }}" = "darwin" ]; then
-            true
-          fi
-          gh release upload ${{ github.event.release.tag_name }} $BINARY_NAME --repo ${{ github.repository }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DRAFT_RELEASE: ${{ inputs.draft_release }}
         shell: bash
+        run: |
+          set -euo pipefail
+          tag="$REQUESTED_TAG"
+          if [[ -z "$tag" && "$REF_TYPE" == tag ]]; then tag="$REF_NAME"; fi
+          version=1.5.12
+          if [[ -n "$tag" ]]; then
+            [[ "$tag" =~ ^v1\.5\.[0-9]+$ ]] || { echo 'Expected a numeric v1.5.<patch> tag'; exit 1; }
+            [[ "$(git rev-parse "refs/tags/$tag^{commit}")" == "$(git rev-parse HEAD)" ]] || { echo 'Tag does not match the checked-out commit'; exit 1; }
+            version="${tag#v}"
+          elif [[ "$DRAFT_RELEASE" == true ]]; then
+            echo 'Draft release creation requires an existing version tag'; exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: identity
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Native Linux tests and vet
+        run: make check
+
+  build:
+    needs: [identity, check]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: linux, arch: amd64}
+          - {os: linux, arch: arm64}
+          - {os: linux, arch: '386'}
+          - {os: linux, arch: arm}
+          - {os: linux, arch: loong64}
+          - {os: windows, arch: amd64}
+          - {os: windows, arch: arm64}
+          - {os: darwin, arch: amd64}
+          - {os: darwin, arch: arm64}
+          - {os: freebsd, arch: amd64}
+          - {os: freebsd, arch: arm64}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Build platform binaries and legal archive
+        env:
+          AGENT_VERSION: ${{ needs.identity.outputs.version }}
+          VERSION_HASH: ${{ needs.identity.outputs.commit }}
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          make artifacts GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" DIST=build/package
+          extension=''
+          if [[ "$TARGET_OS" == windows ]]; then extension=.exe; fi
+          legacy="komari-agent-${TARGET_OS}-${TARGET_ARCH}${extension}"
+          branded="shellbeam-monitoring-agent-${TARGET_OS}-${TARGET_ARCH}${extension}"
+          package="shellbeam-monitoring-agent-${AGENT_VERSION}-${TARGET_OS}-${TARGET_ARCH}"
+          cmp "build/package/$legacy" "build/package/$branded"
+          mv build/package "build/$package"
+          mkdir -p dist
+          cp "build/$package/$legacy" "build/$package/$branded" dist/
+          tar -C build -czf "dist/${package}.tar.gz" "$package"
+          (cd dist && sha256sum "$legacy" "$branded" "${package}.tar.gz" > "${package}.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shellbeam-monitoring-agent-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*
+          retention-days: 14
+
+  draft-release:
+    needs: [identity, build]
+    if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.draft_release == true)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shellbeam-monitoring-agent-*
+          path: dist
+          merge-multiple: true
+      - name: Create a draft release without changing the trusted App feed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.identity.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo 'A release already exists; refusing to replace its assets.'; exit 1
+          fi
+          gh release create "$TAG" dist/* --verify-tag --draft \
+            --title "ShellBeam Monitoring Agent $TAG" \
+            --notes 'Independent Komari Agent fork based on upstream 1.5.11 (c7bafb79b1a73ed9e14e2c248ae4d4163e506036), compatible with ShellBeam Server API 1.6.0. The numeric version identifies the ShellBeam fork. Branded and komari-agent compatibility aliases have identical bytes. Archives include MIT, upstream provenance and dependency license texts. This draft does not promote artifacts into the ShellBeam signed probe feed; existing App signatures, origin restrictions and managed lifecycle acceptance remain required.'

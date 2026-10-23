@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [shellbeam]
+  pull_request:
+    branches: [shellbeam]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Test, vet, build, and collect licenses
+        run: make check artifacts
+      - name: Check integration tool syntax
+        run: |
+          python3 -m py_compile scripts/agent-server-smoke.py scripts/collect-third-party-notices.py
+          node --check scripts/managed-lifecycle-smoke.mjs
+      - name: Verify compatibility aliases and build identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist/shellbeam-monitoring-agent --build-info > build-info.json
+          python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          info = json.loads(Path('build-info.json').read_text())
+          assert info['product'] == 'ShellBeam Monitoring Agent'
+          assert info['runtime'] == 'komari'
+          assert info['version'] == '1.5.12'
+          assert info['upstream_version'] == '1.5.11'
+          assert info['upstream_commit'] == 'c7bafb79b1a73ed9e14e2c248ae4d4163e506036'
+          PYCODE
+          cmp dist/komari-agent-linux-${{ matrix.arch }} dist/shellbeam-monitoring-agent-linux-${{ matrix.arch }}
+          test -s dist/THIRD_PARTY_NOTICES/modules.json
+      - name: Build and inspect the self-contained container
+        if: matrix.arch == 'amd64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --build-arg VERSION_HASH="$(git rev-parse HEAD)" -t shellbeam-monitoring-agent:ci .
+          docker run --rm shellbeam-monitoring-agent:ci --build-info
+          test "$(docker image inspect --format '{{.Config.User}}' shellbeam-monitoring-agent:ci)" = shellbeam:shellbeam
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shellbeam-monitoring-agent-ci-linux-${{ matrix.arch }}
+          path: |
+            dist/
+            build-info.json
+          retention-days: 7
+
+  cross-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux/386, linux/arm, linux/loong64, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64, freebsd/amd64, freebsd/arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Cross-build
+        env:
+          TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          make build GOOS="${TARGET%/*}" GOARCH="${TARGET#*/}"

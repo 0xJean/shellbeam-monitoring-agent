@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -22,11 +23,15 @@ import (
 var ErrRestartRequired = errors.New("update installed; restart required")
 
 var (
-	CurrentVersion string = "0.0.1"
-	Repo           string = "komari-monitor/komari-agent"
+	CurrentVersion = "1.5.12"
+	VersionHash    = "unknown"
+	Repo           = "0xJean/shellbeam-monitoring-agent"
 )
 
 const (
+	ProductName           = "ShellBeam Monitoring Agent"
+	UpstreamVersion       = "1.5.11"
+	UpstreamCommit        = "c7bafb79b1a73ed9e14e2c248ae4d4163e506036"
 	snapshotVersionPrefix = "Snapshot-"
 	containerMarkerPath   = "/.komari-agent-container"
 	githubAPIBaseURL      = "https://api.github.com"
@@ -179,7 +184,7 @@ func listGitHubReleases(owner, repo string) ([]githubRelease, error) {
 		}
 
 		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("User-Agent", "komari-agent")
+		req.Header.Set("User-Agent", "shellbeam-monitoring-agent")
 		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -337,10 +342,14 @@ func checkAndUpdateSnapshot(updater selfUpdater, listReleases releaseLister, isC
 
 // 检查更新并执行自动更新
 func CheckAndUpdate() error {
+	if isContainerAgent() {
+		log.Println("Container agent: update the ShellBeam Monitoring Agent image instead of the binary.")
+		return nil
+	}
 	log.Println("Checking update...")
 
 	http.DefaultClient = dnsresolver.GetHTTPClient(60 * time.Second)
-	updater, err := selfupdate.NewUpdater(selfupdate.Config{})
+	updater, err := selfupdate.NewUpdater(selfupdate.Config{Filters: []string{legacyAssetFilter()}})
 	if err != nil {
 		return fmt.Errorf("failed to create updater: %v", err)
 	}
@@ -355,4 +364,10 @@ func CheckAndUpdate() error {
 	}
 
 	return checkAndUpdateStable(currentSemVer, updater)
+}
+
+// Release drafts contain branded filenames and byte-identical compatibility
+// aliases. Select only the exact alias for this platform, never another asset.
+func legacyAssetFilter() string {
+	return "^" + regexp.QuoteMeta(expectedAssetName(runtime.GOOS, runtime.GOARCH)) + "$"
 }
