@@ -1,0 +1,11 @@
+ShellBeam Monitoring Agent
+
+This product is derived from komari-monitor/komari-agent 1.5.11
+(commit c7bafb79b1a73ed9e14e2c248ae4d4163e506036), licensed under MIT.
+Upstream: https://github.com/komari-monitor/komari-agent
+Fork: https://github.com/0xJean/shellbeam-monitoring-agent
+
+ShellBeam Monitoring Agent is maintained independently from the Komari project.
+ShellBeam version 1.5.12 identifies this fork, not an upstream Komari release.
+The original copyright and license are retained in LICENSE. Dependency license
+texts accompany binary/container distributions in THIRD_PARTY_NOTICES/.

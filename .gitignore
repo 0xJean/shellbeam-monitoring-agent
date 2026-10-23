@@ -10,3 +10,7 @@ auto-discovery.json
 fake-agent-client.json
 net_static.json
 config.json
+
+dist/
+shellbeam-monitoring-agent
+shellbeam-monitoring-agent.exe
