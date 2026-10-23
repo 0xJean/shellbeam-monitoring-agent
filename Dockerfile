@@ -7,7 +7,7 @@ RUN go mod download all
 COPY . .
 ARG TARGETOS=linux
 ARG TARGETARCH
-ARG AGENT_VERSION=1.5.12
+ARG AGENT_VERSION=1.5.13
 ARG VERSION_HASH=""
 RUN set -eu; \
     if [ -z "$VERSION_HASH" ]; then VERSION_HASH="$(git rev-parse HEAD)"; fi; \
@@ -30,7 +30,7 @@ WORKDIR /app
 COPY --from=build /out/shellbeam-monitoring-agent /usr/local/bin/shellbeam-monitoring-agent
 COPY --from=build /out/LICENSE /out/NOTICE /out/UPSTREAM.md /usr/share/doc/shellbeam-monitoring-agent/
 COPY --from=build /out/THIRD_PARTY_NOTICES /usr/share/doc/shellbeam-monitoring-agent/THIRD_PARTY_NOTICES
-ARG AGENT_VERSION=1.5.12
+ARG AGENT_VERSION=1.5.13
 LABEL org.opencontainers.image.title="ShellBeam Monitoring Agent" \
       org.opencontainers.image.description="Independent Komari-compatible monitoring agent for ShellBeam Server" \
       org.opencontainers.image.source="https://github.com/0xJean/shellbeam-monitoring-agent" \

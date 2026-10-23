@@ -4,7 +4,7 @@ Use Go 1.25 or newer. The module still declares Go 1.24; packaging uses Go 1.25
 to satisfy the selected dependency/toolchain combination consistently.
 
 ```sh
-make check artifacts AGENT_VERSION=1.5.12
+make check artifacts AGENT_VERSION=1.5.13
 ```
 
 `make build` writes `dist/shellbeam-monitoring-agent` (plus `.exe` on Windows).
@@ -28,7 +28,7 @@ the baseline, while fork versions identify the actual delivered build.
 No workflow publishes a signed App feed, replaces existing release assets,
 publishes Docker images, or automatically creates snapshot prereleases.
 
-To prepare a release, tag the reviewed source commit as `v1.5.12` (or the next
+To prepare a release, tag the reviewed source commit as `v1.5.13` (or the next
 numeric patch). A version-tag push builds artifacts and creates a **draft**
 GitHub release. Alternatively dispatch Release with an existing tag and
 `draft_release=true`. An empty tag builds the selected ref as workflow artifacts
@@ -51,7 +51,7 @@ the legal bundle as source code.
 ## Container
 
 ```sh
-docker build --build-arg AGENT_VERSION=1.5.12 \
+docker build --build-arg AGENT_VERSION=1.5.13 \
   --build-arg VERSION_HASH="$(git rev-parse HEAD)" \
   -t shellbeam-monitoring-agent:local .
 docker build --target artifacts --output type=local,dest=container-artifacts .
@@ -65,3 +65,16 @@ Buildx can target Linux amd64/arm64; native lifecycle tests remain required for
 managed probe deployment. Containers keep the legacy marker
 `/.komari-agent-container` and disable self-update through
 `AGENT_DISABLE_AUTO_UPDATE=true`; keep it disabled in JSON config too.
+
+## 1.5.13 maintenance release
+
+The second independently versioned ShellBeam build retains the 1.5.12 runtime
+behavior, JSON configuration and Server reporting protocol. It establishes a
+distinct reviewed source commit and release artifact for the managed
+1.5.12 → 1.5.13 → retained 1.5.12 lifecycle. It does not claim new collection
+features or a protocol migration. The old release and its signed manifests stay
+immutable and available for retained rollback.
+
+Source checks, native Linux builds on both CPU architectures, exact artifact
+hashes and the protected App signing workflow remain required. Successful
+publication alone is not proof of installed-App upgrade/rollback acceptance.

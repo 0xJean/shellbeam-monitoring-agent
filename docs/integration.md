@@ -11,7 +11,7 @@
 | Existing Rust `shellbeam-agent` | ShellBeam application | Separate local/SSH collection component |
 
 This fork starts from upstream Agent `1.5.11` at commit
-`c7bafb79b1a73ed9e14e2c248ae4d4163e506036`. Its own report version is `1.5.12`.
+`c7bafb79b1a73ed9e14e2c248ae4d4163e506036`. Its own report version is `1.5.13`.
 `--build-info` carries the upstream baseline separately. Keep protocol keys,
 `X-Komari-*` headers, endpoint paths, compression, token handling, configuration
 schema and remote-control capability flags unchanged unless both sides are
@@ -73,7 +73,7 @@ registration/basic info, fresh metric samples, reconnect and restart behavior.
 Use the existing production remote helper with candidate inputs on isolated real
 Linux systemd hosts to verify install, status, start/stop, upgrade from `1.5.11`,
 failed-upgrade rollback, uninstall and legacy takeover where supported.
-Confirm the running executable bytes and reported `1.5.12` version match the
+Confirm the running executable bytes and reported `1.5.13` version match the
 candidate catalog, and confirm ownership/token preservation. Synthetic fixtures
 or tests still downloading the original upstream binary are not evidence that
 this fork completed lifecycle acceptance.

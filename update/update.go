@@ -23,7 +23,7 @@ import (
 var ErrRestartRequired = errors.New("update installed; restart required")
 
 var (
-	CurrentVersion = "1.5.12"
+	CurrentVersion = "1.5.13"
 	VersionHash    = "unknown"
 	Repo           = "0xJean/shellbeam-monitoring-agent"
 )

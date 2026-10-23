@@ -49,7 +49,7 @@ jobs:
           info = json.loads(Path('build-info.json').read_text())
           assert info['product'] == 'ShellBeam Monitoring Agent'
           assert info['runtime'] == 'komari'
-          assert info['version'] == '1.5.12'
+          assert info['version'] == '1.5.13'
           assert info['upstream_version'] == '1.5.11'
           assert info['upstream_commit'] == 'c7bafb79b1a73ed9e14e2c248ae4d4163e506036'
           PYCODE

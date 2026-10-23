@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           tag="$REQUESTED_TAG"
           if [[ -z "$tag" && "$REF_TYPE" == tag ]]; then tag="$REF_NAME"; fi
-          version=1.5.12
+          version=1.5.13
           if [[ -n "$tag" ]]; then
             [[ "$tag" =~ ^v1\.5\.[0-9]+$ ]] || { echo 'Expected a numeric v1.5.<patch> tag'; exit 1; }
             [[ "$(git rev-parse "refs/tags/$tag^{commit}")" == "$(git rev-parse HEAD)" ]] || { echo 'Tag does not match the checked-out commit'; exit 1; }

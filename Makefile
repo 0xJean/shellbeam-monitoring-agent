@@ -1,7 +1,7 @@
 GO ?= go
 PYTHON ?= python3
 DIST ?= dist
-AGENT_VERSION ?= 1.5.12
+AGENT_VERSION ?= 1.5.13
 VERSION_HASH ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
