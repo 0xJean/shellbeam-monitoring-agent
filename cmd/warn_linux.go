@@ -17,10 +17,12 @@ const (
 	linuxMOTDPath          = "/etc/motd"
 	legacyUpdateMOTDPath   = "/etc/update-motd.d/99-komari-agent-warning"
 	legacyUpdateMOTDMarker = "# Komari Agent managed MOTD warning"
-	motdWarningStart       = "[Komari] Remote control is enabled on this device"
+	motdWarningStart       = warningTitle
+	upstreamMOTDStart      = "[Komari] Remote control is enabled on this device"
+	upstreamMOTDEnd        = "Uninstall Komari Agent: https://komari-document.pages.dev/en/faq/uninstall\n"
 )
 
-var motdWarningEnd = "Uninstall Komari Agent: " + warningUninstallURL + "\n"
+var motdWarningEnd = "Uninstall ShellBeam Monitoring Agent: " + warningUninstallURL + "\n"
 
 type motdFile struct {
 	target   string
@@ -82,7 +84,7 @@ func removeLegacyUpdateMOTDWarning(path string) {
 		return
 	}
 	if !strings.HasPrefix(string(data), legacyUpdateMOTDMarker+"\n") {
-		log.Printf("[warn] legacy update-motd path is not managed by Komari; leaving it in place")
+		log.Printf("[warn] legacy update-motd path is not managed by upstream Komari; leaving it in place")
 		return
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -167,23 +169,31 @@ func installMOTDWarning(path string, warning securityWarning) (func(), error) {
 func renderMOTDWarning(warning securityWarning) string {
 	return fmt.Sprintf("%s\n"+
 		"\x1b[33m%s\x1b[0m can \x1b[31mexecute commands\x1b[0m and read or \x1b[31mmodify files\x1b[0m on this device as \x1b[33m%s\x1b[0m.\n"+
-		"%s\n%s\n\nUninstall Komari Agent: %s\n",
+		"%s\n%s\n\nUninstall ShellBeam Monitoring Agent: %s\n",
 		motdWarningStart, warning.PanelHost, warning.RunAsUser, warningAdvice, warningCompromise, warningUninstallURL)
 }
 
 func removeMOTDWarning(content string) (string, bool, error) {
-	start := strings.Index(content, motdWarningStart)
-	if start < 0 {
+	// Keep recognizing the upstream block so upgrades can remove an old warning.
+	// Refuse ambiguous/malformed content before modifying an administrator's MOTD.
+	count := strings.Count(content, motdWarningStart) + strings.Count(content, upstreamMOTDStart)
+	if count == 0 {
 		return content, false, nil
 	}
-	if strings.Contains(content[start+len(motdWarningStart):], motdWarningStart) {
-		return "", false, fmt.Errorf("refusing to modify MOTD with multiple Komari warnings")
+	if count != 1 {
+		return "", false, fmt.Errorf("refusing to modify MOTD with multiple agent warnings")
 	}
-	relativeEnd := strings.Index(content[start:], motdWarningEnd)
+	start := strings.Index(content, motdWarningStart)
+	endMarker := motdWarningEnd
+	if start < 0 {
+		start = strings.Index(content, upstreamMOTDStart)
+		endMarker = upstreamMOTDEnd
+	}
+	relativeEnd := strings.Index(content[start:], endMarker)
 	if relativeEnd < 0 {
-		return "", false, fmt.Errorf("refusing to modify incomplete Komari warning in MOTD")
+		return "", false, fmt.Errorf("refusing to modify incomplete agent warning in MOTD")
 	}
-	end := start + relativeEnd + len(motdWarningEnd)
+	end := start + relativeEnd + len(endMarker)
 	before := content[:start]
 	after := strings.TrimPrefix(content[end:], "\n")
 	return before + after, true, nil
@@ -226,7 +236,7 @@ func readMOTD(path string) (motdFile, error) {
 }
 
 func writeMOTD(file motdFile, data []byte) error {
-	temp, err := os.CreateTemp(filepath.Dir(file.target), ".komari-motd-*")
+	temp, err := os.CreateTemp(filepath.Dir(file.target), ".shellbeam-motd-*")
 	if err != nil {
 		return err
 	}

@@ -296,3 +296,35 @@ func TestLegacyUpdateMOTDHookCleanup(t *testing.T) {
 		t.Fatal("unmanaged legacy hook was changed")
 	}
 }
+
+func TestMOTDWarningMigratesUpstreamBrand(t *testing.T) {
+	const base = "Administrator banner\n\n"
+	old := upstreamMOTDStart + "\nold warning\n" + upstreamMOTDEnd
+	path := filepath.Join(t.TempDir(), "motd")
+	if err := os.WriteFile(path, []byte(base+old), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cleanup, err := installMOTDWarning(path, newSecurityWarning("https://panel.example.com", "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), upstreamMOTDStart) || !strings.Contains(string(data), warningTitle) {
+		t.Fatal("upstream warning was not replaced with branded warning")
+	}
+	cleanup()
+	data, err = os.ReadFile(path)
+	if err != nil || string(data) != base {
+		t.Fatalf("administrator banner changed: %q err=%v", data, err)
+	}
+	mixed := old + renderMOTDWarning(newSecurityWarning("https://panel.example.com", "root"))
+	if _, _, err := removeMOTDWarning(mixed); err == nil {
+		t.Fatal("accepted mixed duplicate warnings")
+	}
+	if _, _, err := removeMOTDWarning(upstreamMOTDStart + "\npartial"); err == nil {
+		t.Fatal("accepted incomplete upstream warning")
+	}
+}

@@ -1,62 +1,59 @@
 package server
 
 import (
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
 
-var testTargets = []struct {
-	target string
-}{
-	{"v6-sh-cm.oojj.de"},
-	{"2409:8c1e:8f80:2:6a::"},
-	{"[2409:8c1e:8f80:2:6a::]"},
-	{"[2409:8c1e:8f80:2:6a::]:80"},
-	{"v4-sh-cm.oojj.de"},
-	{"117.185.125.154"},
-	{"117.185.125.154:80"},
-}
-
+// ICMP needs raw-socket permissions. Run explicitly in the isolated Linux
+// fixture; ordinary CI must not depend on privileged sockets or public hosts.
 func TestICMPPing(t *testing.T) {
-	timeout := 3 * time.Second
-	for _, tt := range testTargets {
-		t.Run(tt.target, func(t *testing.T) {
-			latency, err := icmpPing(tt.target, timeout)
-			if latency < -1 {
-				t.Errorf("ICMP ping %s: invalid latency %d", tt.target, latency)
-			}
-			if err != nil {
-				t.Errorf("ICMP ping %s error: %v", tt.target, err)
-			}
-		})
+	if os.Getenv("SHELLBEAM_TEST_RAW_ICMP") != "1" {
+		t.Skip("set SHELLBEAM_TEST_RAW_ICMP=1 in a fixture with raw-socket permission")
+	}
+	for _, target := range []string{"127.0.0.1", "127.0.0.1:80"} {
+		latency, err := icmpPing(target, time.Second)
+		if err != nil || latency < 0 {
+			t.Fatalf("loopback ICMP %q: latency=%d err=%v", target, latency, err)
+		}
 	}
 }
 
 func TestTCPPing(t *testing.T) {
-	timeout := 3 * time.Second
-	for _, tt := range testTargets {
-		t.Run(tt.target, func(t *testing.T) {
-			latency, err := tcpPing(tt.target, timeout)
-			if latency < -1 {
-				t.Errorf("TCP ping %s: invalid latency %d", tt.target, latency)
-			}
-			if err != nil {
-				t.Errorf("TCP ping %s error: %v", tt.target, err)
-			}
-		})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := listener.Addr().String()
+	t.Cleanup(func() { listener.Close() })
+	latency, err := tcpPing(target, time.Second)
+	if err != nil || latency < 0 {
+		t.Fatalf("loopback TCP: latency=%d err=%v", latency, err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	latency, err = tcpPing(target, time.Second)
+	if err == nil || latency != -1 {
+		t.Fatalf("closed TCP port: latency=%d err=%v", latency, err)
 	}
 }
 
 func TestHTTPPing(t *testing.T) {
-	timeout := 3 * time.Second
-	for _, tt := range testTargets {
-		t.Run(tt.target, func(t *testing.T) {
-			latency, err := httpPing(tt.target, timeout)
-			if latency < -1 {
-				t.Errorf("HTTP ping %s: invalid latency %d", tt.target, latency)
-			}
-			if err != nil {
-				t.Errorf("HTTP ping %s error: %v", tt.target, err)
+	for _, status := range []int{http.StatusOK, http.StatusNoContent, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(status) }))
+			defer srv.Close()
+			for _, target := range []string{srv.URL, strings.TrimPrefix(srv.URL, "http://")} {
+				latency, err := httpPing(target, time.Second)
+				if latency < 0 || (err != nil) != (status >= 400) {
+					t.Fatalf("HTTP %d: latency=%d err=%v", status, latency, err)
+				}
 			}
 		})
 	}

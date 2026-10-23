@@ -28,12 +28,19 @@ import (
 var flags = pkg_flags.GlobalConfig
 
 var warningPanelHost, warningRunAsUser string
+var showBuildInfo bool
 
 var RootCmd = &cobra.Command{
-	Use:   "komari-agent",
-	Short: "komari agent",
-	Long:  `komari agent`,
+	Use:     "shellbeam-monitoring-agent",
+	Short:   update.ProductName,
+	Long:    "ShellBeam Monitoring Agent — compatible with ShellBeam Server and Komari reporting protocols.",
+	Version: update.CurrentVersion,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Build information must be available without reading service credentials,
+		// touching MOTD or opening any network connection.
+		if showBuildInfo {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(update.BuildInfo())
+		}
 		// Notification helpers must not load the service's config or credentials.
 		if flags.ShowWarning {
 			ShowToast()
@@ -83,7 +90,7 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		log.Println("Komari Agent", update.CurrentVersion)
+		log.Println(update.ProductName, update.CurrentVersion)
 		log.Println("Github Repo:", update.Repo)
 
 		// 设置 DNS 解析行为
@@ -168,6 +175,8 @@ func Execute() {
 }
 
 func init() {
+	RootCmd.SetVersionTemplate("{{.Short}} {{.Version}}\n")
+	RootCmd.PersistentFlags().BoolVar(&showBuildInfo, "build-info", false, "Print product and upstream provenance as JSON, then exit")
 	RootCmd.PersistentFlags().StringVarP(&flags.Token, "token", "t", "", "API token")
 	//RootCmd.MarkPersistentFlagRequired("token")
 	RootCmd.PersistentFlags().StringVarP(&flags.Endpoint, "endpoint", "e", "", "API endpoint")

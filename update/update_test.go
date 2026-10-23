@@ -2,6 +2,7 @@ package update
 
 import (
 	"errors"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -236,8 +237,8 @@ func TestSnapshotUpdateReturnsRestartRequired(t *testing.T) {
 		},
 	}
 	lister := func(owner, repo string) ([]githubRelease, error) {
-		if owner != "komari-monitor" || repo != "komari-agent" {
-			t.Fatalf("list releases repo = %s/%s, want komari-monitor/komari-agent", owner, repo)
+		if owner != "0xJean" || repo != "shellbeam-monitoring-agent" {
+			t.Fatalf("list releases repo = %s/%s, want 0xJean/shellbeam-monitoring-agent", owner, repo)
 		}
 		return []githubRelease{release}, nil
 	}
@@ -295,5 +296,17 @@ func testRelease(tag string, prerelease, draft bool, publishedAt time.Time, asse
 		HTMLURL:     "https://example.com/" + tag,
 		PublishedAt: publishedAt,
 		Assets:      assets,
+	}
+}
+
+func TestUpdaterSelectsOnlyPlatformCompatibilityAlias(t *testing.T) {
+	filter := regexp.MustCompile(legacyAssetFilter())
+	if !filter.MatchString(expectedAssetName(runtime.GOOS, runtime.GOARCH)) {
+		t.Fatal("updater rejects compatibility alias")
+	}
+	for _, asset := range []string{"shellbeam-monitoring-agent-" + runtime.GOOS + "-" + runtime.GOARCH, expectedAssetName(runtime.GOOS, runtime.GOARCH) + ".sha256", "komari-agent-foreign-arch"} {
+		if filter.MatchString(asset) {
+			t.Fatalf("updater accepts unintended asset %q", asset)
+		}
 	}
 }
