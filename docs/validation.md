@@ -109,3 +109,17 @@ Repository builds and this smoke result do not promote the candidate into the
 App's production trusted feed. Production signing and distribution remain
 separate release steps; this fork must not weaken signature, digest, ownership
 or version checks to become installable.
+
+## 1.5.13 maintenance validation (2026-10-24)
+
+Release/source `a7154f8151222c2eff3146e2acb7b3c8c1b6276c` passed native
+Linux amd64/arm64 and all release cross-builds (39983161969/39983163294).
+The local macOS ARM64 candidate passed all ten real Server/Agent checks against
+ShellBeam Server after repairing the observer: version metadata is now also
+available on the temporary install router, so wait for `/api/me` before login;
+Python 3.9 requires normalization of Go nanosecond timestamps. The observer
+truncates only sub-microsecond precision and still compares exact stored
+millisecond values, requires three original CPU samples and retains the same
+readiness budget. Three timestamp regressions pass. All private fixture data
+and both child processes were cleaned. This evidence is separate from signed
+Linux bytes and installed-App WEB upgrade/rollback acceptance.

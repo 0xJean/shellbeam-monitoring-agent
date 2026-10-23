@@ -20,6 +20,7 @@ from http.cookies import SimpleCookie
 import json
 import math
 import os
+import re
 from pathlib import Path
 import secrets
 import signal
@@ -40,19 +41,23 @@ def require(condition):
         raise AssertionError("contract check failed")
 
 
-def timestamp(value):
+def parse_timestamp(value):
     require(isinstance(value, str))
-    result = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    require(result.tzinfo is not None)
-    return result.timestamp()
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})", value)
+    require(match is not None)
+    # Python 3.9 rejects Go's variable nanosecond precision. Truncate only the
+    # sub-microsecond remainder; never round into the next stored millisecond.
+    fraction = (match[2] or "")[:6].ljust(6, "0")
+    offset = "+00:00" if match[3] == "Z" else match[3]
+    return datetime.fromisoformat(match[1] + "." + fraction + offset)
+
+
+def timestamp(value):
+    return parse_timestamp(value).timestamp()
 
 
 def timestamp_millis(value):
-    # The metric store preserves source receive times at millisecond precision;
-    # recent reports retain Go's nanoseconds. Compare the same stored precision
-    # without rounding a floating-point Unix timestamp across a millisecond.
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    require(parsed.tzinfo is not None)
+    parsed = parse_timestamp(value)
     elapsed = parsed - datetime(1970, 1, 1, tzinfo=timezone.utc)
     return (elapsed.days * 86400 + elapsed.seconds) * 1000 + elapsed.microseconds // 1000
 
@@ -271,6 +276,10 @@ class Smoke:
         initial_version = self.wait_for(self.version)
         self.passed("server-api-1.6.0-and-shellbeam-product-metadata")
 
+        # Product metadata is also exposed by the temporary install router.
+        # Wait for the installed router before submitting synthetic login data.
+        self.wait_for(lambda: self.request("/api/me")[0] == 200)
+
         self.stage = "isolated-node-and-private-config"
         status, headers, _ = self.request("/api/login", {"username": username, "password": password})
         require(status == 200)
@@ -359,7 +368,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server-binary", required=True, type=Path)
     parser.add_argument("--agent-binary", required=True, type=Path)
-    parser.add_argument("--expected-version", default="1.5.12")
+    parser.add_argument("--expected-version", default="1.5.13")
     args = parser.parse_args()
     if sys.platform.startswith("linux") and os.geteuid() == 0:
         parser.error("run as an unprivileged user; the Agent may inspect Linux MOTD warning files")
