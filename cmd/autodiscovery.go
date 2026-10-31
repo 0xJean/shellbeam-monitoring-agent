@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/komari-monitor/komari-agent/dnsresolver"
@@ -51,12 +52,15 @@ func getAutoDiscoveryFilePath() string {
 
 // loadAutoDiscoveryConfig 加载自动发现配置
 func loadAutoDiscoveryConfig() (*AutoDiscoveryConfig, error) {
-	configPath := getAutoDiscoveryFilePath()
+	return loadAutoDiscoveryConfigFrom(getAutoDiscoveryFilePath())
+}
 
+func loadAutoDiscoveryConfigFrom(configPath string) (*AutoDiscoveryConfig, error) {
 	// 检查文件是否存在
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, nil // 文件不存在，返回nil
 	}
+	tightenAutoDiscoveryFile(configPath)
 
 	// 读取文件内容
 	data, err := os.ReadFile(configPath)
@@ -75,8 +79,10 @@ func loadAutoDiscoveryConfig() (*AutoDiscoveryConfig, error) {
 
 // saveAutoDiscoveryConfig 保存自动发现配置
 func saveAutoDiscoveryConfig(config *AutoDiscoveryConfig) error {
-	configPath := getAutoDiscoveryFilePath()
+	return saveAutoDiscoveryConfigTo(getAutoDiscoveryFilePath(), config)
+}
 
+func saveAutoDiscoveryConfigTo(configPath string, config *AutoDiscoveryConfig) error {
 	// 序列化为JSON
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -84,12 +90,63 @@ func saveAutoDiscoveryConfig(config *AutoDiscoveryConfig) error {
 	}
 
 	// 写入文件
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	if err := writeFileAtomicPrivate(configPath, data); err != nil {
 		return fmt.Errorf("failed to write auto-discovery config: %v", err)
 	}
 
 	log.Printf("Auto-discovery config saved to: %s", configPath)
 	return nil
+}
+
+// writeFileAtomicPrivate never exposes the token: os.CreateTemp creates the file
+// as 0600 and the rename replaces any previous file (and any symlink) at once.
+func writeFileAtomicPrivate(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".auto-discovery-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0600); err != nil && runtime.GOOS != "windows" {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// tightenAutoDiscoveryFile repairs files written 0644 by earlier versions. A
+// failure is only logged so an existing deployment keeps reporting.
+func tightenAutoDiscoveryFile(path string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		log.Printf("Failed to check auto-discovery config permissions: %v", err)
+		return
+	}
+	if !info.Mode().IsRegular() {
+		log.Printf("[warn] auto-discovery config %s is not a regular file; permissions left unchanged", path)
+		return
+	}
+	if info.Mode().Perm()&0077 == 0 {
+		return
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		log.Printf("[warn] could not restrict auto-discovery config permissions: %v", err)
+		return
+	}
+	log.Printf("Restricted auto-discovery config permissions to 0600: %s", path)
 }
 
 // registerWithAutoDiscovery 使用自动发现key注册
