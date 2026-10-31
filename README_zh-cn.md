@@ -14,7 +14,7 @@ ShellBeam Monitoring Agent 向 [ShellBeam Server](https://github.com/0xJean/shel
 
 ## 构建和身份信息
 
-使用 Go 1.25 或更新版本、GNU make 和 Python 3：
+使用 Go 1.26 或更新版本、GNU make 和 Python 3：
 
 ```sh
 make check build

@@ -71,7 +71,7 @@ jobs:
           ref: ${{ needs.identity.outputs.commit }}
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.x'
           cache: true
       - name: Native Linux tests and vet
         run: make check
@@ -101,7 +101,7 @@ jobs:
           ref: ${{ needs.identity.outputs.commit }}
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.x'
           cache: true
       - name: Build platform binaries and legal archive
         env:

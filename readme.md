@@ -14,7 +14,7 @@ the existing ShellBeam application workspace.
 
 ## Build and identify
 
-Use Go 1.25 or newer, GNU make and Python 3:
+Use Go 1.26 or newer, GNU make and Python 3:
 
 ```sh
 make check build

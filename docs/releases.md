@@ -1,7 +1,7 @@
 # Builds and releases
 
-Use Go 1.25 or newer. The module still declares Go 1.24; packaging uses Go 1.25
-to satisfy the selected dependency/toolchain combination consistently.
+Use Go 1.26 or newer. The module declares Go 1.26 because the patched
+`golang.org/x/net` and `golang.org/x/text` releases require it.
 
 ```sh
 make check artifacts AGENT_VERSION=1.5.13
