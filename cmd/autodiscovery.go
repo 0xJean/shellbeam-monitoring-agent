@@ -225,6 +225,7 @@ func registerWithAutoDiscovery() error {
 
 	// 设置token
 	flags.Token = registerResp.Data.Token
+	utils.RegisterSecret(flags.Token)
 	log.Printf("Successfully registered with auto-discovery. UUID: %s", registerResp.Data.UUID)
 
 	return nil
@@ -242,6 +243,7 @@ func handleAutoDiscovery() error {
 	if config != nil {
 		// 配置文件存在，使用现有token
 		flags.Token = config.Token
+		utils.RegisterSecret(flags.Token)
 		log.Printf("Using existing auto-discovery token for UUID: %s", config.UUID)
 		return nil
 	}
