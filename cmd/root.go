@@ -129,7 +129,7 @@ var RootCmd = &cobra.Command{
 			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		}
 		// 自动更新
-		if !flags.DisableAutoUpdate {
+		if flags.AutoUpdateEnabled() {
 			err := update.CheckAndUpdate()
 			if handleUpdateCheckResult(err, shutdown) {
 				return nil
@@ -137,6 +137,8 @@ var RootCmd = &cobra.Command{
 			go update.DoUpdateWorks(func() {
 				shutdown.shutdown(42)
 			})
+		} else {
+			log.Println("Auto-update is off; set --enable-auto-update to opt in")
 		}
 		go server.DoUploadBasicInfoWorks()
 		for {
@@ -173,7 +175,7 @@ func Execute() {
 	log.SetOutput(utils.NewRedactingWriter(os.Stderr))
 	for i, arg := range os.Args {
 		if arg == "-autoUpdate" || arg == "--autoUpdate" {
-			log.Println("WARNING: The -autoUpdate flag is deprecated in version 0.0.9 and later. Use --disable-auto-update to configure auto-update behavior.")
+			log.Println("WARNING: The -autoUpdate flag is deprecated in version 0.0.9 and later. Use --enable-auto-update to configure auto-update behavior.")
 			// 从参数列表中移除该参数，防止cobra解析错误
 			os.Args = append(os.Args[:i], os.Args[i+1:]...)
 			break
@@ -199,7 +201,8 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&flags.Endpoint, "endpoint", "e", "", "API endpoint")
 	//RootCmd.MarkPersistentFlagRequired("endpoint")
 	RootCmd.PersistentFlags().StringVar(&flags.AutoDiscoveryKey, "auto-discovery", "", "Auto discovery key for the agent")
-	RootCmd.PersistentFlags().BoolVar(&flags.DisableAutoUpdate, "disable-auto-update", false, "Disable automatic updates")
+	RootCmd.PersistentFlags().BoolVar(&flags.DisableAutoUpdate, "disable-auto-update", false, "Disable automatic updates; takes precedence over --enable-auto-update")
+	RootCmd.PersistentFlags().BoolVar(&flags.EnableAutoUpdate, "enable-auto-update", false, "Enable automatic updates; releases must be signed for the key embedded in this build")
 	RootCmd.PersistentFlags().BoolVar(&flags.DisableWebSsh, "disable-web-ssh", false, "Disable remote control(web ssh and rce); takes precedence over --enable-remote-control")
 	RootCmd.PersistentFlags().BoolVar(&flags.EnableRemoteControl, "enable-remote-control", false, "Enable remote control(web ssh and rce); requires a TLS endpoint with certificate verification, except on loopback")
 	//RootCmd.PersistentFlags().BoolVar(&flags.MemoryModeAvailable, "memory-mode-available", false, "[deprecated]Report memory as available instead of used.")

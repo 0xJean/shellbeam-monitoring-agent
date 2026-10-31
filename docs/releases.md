@@ -18,6 +18,9 @@ provenance defaults are pinned to upstream `1.5.11` and its exact commit.
 Do not use `git describe --tags` as the release version: upstream tags describe
 the baseline, while fork versions identify the actual delivered build.
 
+Self-update only accepts assets signed for the key set through
+`UPDATE_PUBLIC_KEY`; see [update-signing.md](update-signing.md).
+
 ## Workflows
 
 | Workflow | Trigger | Behavior |

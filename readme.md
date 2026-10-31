@@ -80,9 +80,12 @@ promote a binary into the App's trusted feed. Signed promotion, URL allowlisting
 checksums, version pins and live lifecycle acceptance are covered in
 [the integration contract](docs/integration.md).
 
-For standalone use, the self-updater targets this fork's repository. Managed
-and container deployments must keep `disable_auto_update` enabled and use their
-own verified upgrade/rollback flow.
+For standalone use, the self-updater targets this fork's repository. It is off
+by default; opt in with `--enable-auto-update`. Releases must carry an Ed25519
+signature for the public key embedded in the build, otherwise the update is
+refused; see [update signing](docs/update-signing.md). Managed and container
+deployments must keep `disable_auto_update` enabled and use their own verified
+upgrade/rollback flow.
 
 ## Container
 
