@@ -99,8 +99,8 @@ func runFileOperation(operation v2.FileOperation) v2.FileResult {
 }
 
 func executeFileOperation(operation v2.FileOperation) (json.RawMessage, error) {
-	if pkg_flags.GlobalConfig.DisableWebSsh {
-		return nil, errors.New("web control is disabled")
+	if refusal := pkg_flags.GlobalConfig.RemoteControlRefusal(); refusal != "" {
+		return nil, errors.New("web control is disabled: " + refusal)
 	}
 	switch operation.Op {
 	case "list":

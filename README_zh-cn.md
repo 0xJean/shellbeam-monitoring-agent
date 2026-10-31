@@ -47,7 +47,14 @@ chmod 600 /absolute/path/to/agent.json
 ./dist/shellbeam-monitoring-agent --config /absolute/path/to/agent.json
 ```
 
-`disable_web_ssh: true` 会关闭探针远程控制通道；请按部署策略配置。
+远程控制（网页终端、任务命令、文件操作）默认关闭。可通过 `--enable-remote-control`、
+`enable_remote_control: true` 或 `AGENT_ENABLE_REMOTE_CONTROL=true` 启用；
+`disable_web_ssh` / `--disable-web-ssh` 仍然有效且优先。当端点不是 `https`/`wss`
+或开启了 `ignore_unsafe_cert` 时（回环地址除外），探针会拒绝远程控制并记录原因；
+数据上报不受影响。
+
+请优先使用 JSON 文件或 `AGENT_TOKEN`，`--token` 会出现在进程列表中。日志中的 token
+和凭据查询参数会被移除。服务端仍从 URL 查询参数读取 token，请留意反向代理的访问日志。
 App 托管部署应继续使用现有管理器生成的配置和服务，不要另起重复服务。
 配置优先级沿用上游，从低到高为：默认值、命令行参数、环境变量、JSON 文件。
 全部参数见 `--help`，映射定义见 [`cmd/flags/flag.go`](cmd/flags/flag.go)。

@@ -49,10 +49,19 @@ chmod 600 /absolute/path/to/agent.json
 ./dist/shellbeam-monitoring-agent --config /absolute/path/to/agent.json
 ```
 
-`disable_web_ssh: true` disables the agent remote-control channel. Set the value
-according to your deployment policy. For App-managed deployments, keep the
-existing generated configuration and service identity rather than creating a
-second service.
+Remote control (web terminal, task commands and file operations) is off by
+default. Opt in with `--enable-remote-control`, `enable_remote_control: true` or
+`AGENT_ENABLE_REMOTE_CONTROL=true`. `disable_web_ssh` / `--disable-web-ssh` stay
+accepted and take precedence. The agent refuses remote control, and logs why,
+when the endpoint is not `https`/`wss` or `ignore_unsafe_cert` is on, except for
+loopback endpoints. Reporting is not affected. For App-managed deployments, keep
+the existing generated configuration and service identity rather than creating
+a second service.
+
+Prefer the JSON file or `AGENT_TOKEN` over `--token`, which is visible in the
+process list. Tokens and credential query parameters are removed from logs.
+Servers read the agent token from the URL query, so it is still sent that way;
+keep access logs on any reverse proxy in mind.
 
 The existing configuration precedence is retained, from lowest to highest:
 defaults, CLI flags, `AGENT_*` environment variables, JSON config. For example,

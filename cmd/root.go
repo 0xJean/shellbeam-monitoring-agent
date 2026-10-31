@@ -67,6 +67,7 @@ var RootCmd = &cobra.Command{
 		stopCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
+		logRemoteControlState()
 		stopWarning := startSecurityWarning(stopCtx)
 		defer stopWarning()
 		shutdown := newShutdownCoordinator(stopWarning, netstatic.Stop, os.Exit)
@@ -145,6 +146,18 @@ var RootCmd = &cobra.Command{
 	},
 }
 
+func logRemoteControlState() {
+	refusal := flags.RemoteControlRefusal()
+	switch {
+	case refusal == "":
+		log.Println("[warn] remote control is enabled: the server can run commands and access files on this device")
+	case flags.EnableRemoteControl:
+		log.Println("[warn] remote control was requested but is refused:", refusal)
+	default:
+		log.Println("Remote control is off:", refusal)
+	}
+}
+
 func handleUpdateCheckResult(err error, shutdown *shutdownCoordinator) bool {
 	if errors.Is(err, update.ErrRestartRequired) {
 		shutdown.shutdown(42)
@@ -187,7 +200,8 @@ func init() {
 	//RootCmd.MarkPersistentFlagRequired("endpoint")
 	RootCmd.PersistentFlags().StringVar(&flags.AutoDiscoveryKey, "auto-discovery", "", "Auto discovery key for the agent")
 	RootCmd.PersistentFlags().BoolVar(&flags.DisableAutoUpdate, "disable-auto-update", false, "Disable automatic updates")
-	RootCmd.PersistentFlags().BoolVar(&flags.DisableWebSsh, "disable-web-ssh", false, "Disable remote control(web ssh and rce)")
+	RootCmd.PersistentFlags().BoolVar(&flags.DisableWebSsh, "disable-web-ssh", false, "Disable remote control(web ssh and rce); takes precedence over --enable-remote-control")
+	RootCmd.PersistentFlags().BoolVar(&flags.EnableRemoteControl, "enable-remote-control", false, "Enable remote control(web ssh and rce); requires a TLS endpoint with certificate verification, except on loopback")
 	//RootCmd.PersistentFlags().BoolVar(&flags.MemoryModeAvailable, "memory-mode-available", false, "[deprecated]Report memory as available instead of used.")
 	RootCmd.PersistentFlags().Float64VarP(&flags.Interval, "interval", "i", 3.0, "Interval in seconds")
 	RootCmd.PersistentFlags().BoolVarP(&flags.IgnoreUnsafeCert, "ignore-unsafe-cert", "u", false, "Ignore unsafe certificate errors")
