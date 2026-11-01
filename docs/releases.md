@@ -1,7 +1,7 @@
 # Builds and releases
 
-Use Go 1.25 or newer. The module still declares Go 1.24; packaging uses Go 1.25
-to satisfy the selected dependency/toolchain combination consistently.
+Use Go 1.26 or newer. The module declares Go 1.26 because the patched
+`golang.org/x/net` and `golang.org/x/text` releases require it.
 
 ```sh
 make check artifacts AGENT_VERSION=1.5.13
@@ -17,6 +17,9 @@ Release builds stamp `update.CurrentVersion` and `update.VersionHash`. Source
 provenance defaults are pinned to upstream `1.5.11` and its exact commit.
 Do not use `git describe --tags` as the release version: upstream tags describe
 the baseline, while fork versions identify the actual delivered build.
+
+Self-update only accepts assets signed for the key set through
+`UPDATE_PUBLIC_KEY`; see [update-signing.md](update-signing.md).
 
 ## Workflows
 

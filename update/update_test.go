@@ -2,28 +2,11 @@ package update
 
 import (
 	"errors"
-	"regexp"
-	"runtime"
+	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/blang/semver"
-	"github.com/rhysd/go-github-selfupdate/selfupdate"
 )
-
-type fakeSelfUpdater struct {
-	updateSelf func(semver.Version, string) (*selfupdate.Release, error)
-	updateTo   func(*selfupdate.Release, string) error
-}
-
-func (f *fakeSelfUpdater) UpdateSelf(current semver.Version, slug string) (*selfupdate.Release, error) {
-	return f.updateSelf(current, slug)
-}
-
-func (f *fakeSelfUpdater) UpdateTo(release *selfupdate.Release, cmdPath string) error {
-	return f.updateTo(release, cmdPath)
-}
 
 // TestParseVersion 验证 parseVersion 能够解析各种版本号格式，包括带 v/V 前缀、预发布和构建元数据
 func TestParseVersion(t *testing.T) {
@@ -199,55 +182,6 @@ func TestSnapshotNeedsUpdate(t *testing.T) {
 	}
 }
 
-func TestStableUpdateReturnsRestartRequired(t *testing.T) {
-	current := semver.MustParse("1.2.3")
-	updater := &fakeSelfUpdater{
-		updateSelf: func(gotCurrent semver.Version, gotRepo string) (*selfupdate.Release, error) {
-			if !gotCurrent.Equals(current) {
-				t.Fatalf("UpdateSelf current = %s, want %s", gotCurrent, current)
-			}
-			if gotRepo != Repo {
-				t.Fatalf("UpdateSelf repo = %q, want %q", gotRepo, Repo)
-			}
-			return &selfupdate.Release{Version: semver.MustParse("1.2.4")}, nil
-		},
-	}
-
-	if err := checkAndUpdateStable(current, updater); !errors.Is(err, ErrRestartRequired) {
-		t.Fatalf("checkAndUpdateStable() error = %v, want ErrRestartRequired", err)
-	}
-}
-
-func TestSnapshotUpdateReturnsRestartRequired(t *testing.T) {
-	oldVersion := CurrentVersion
-	CurrentVersion = "Snapshot-2607061100"
-	t.Cleanup(func() { CurrentVersion = oldVersion })
-
-	assetName := expectedAssetName(runtime.GOOS, runtime.GOARCH)
-	release := testRelease("Snapshot-2607061200", true, false, time.Now(), assetName)
-	updater := &fakeSelfUpdater{
-		updateTo: func(gotRelease *selfupdate.Release, gotPath string) error {
-			if gotRelease.AssetURL != release.Assets[0].BrowserDownloadURL {
-				t.Fatalf("UpdateTo asset = %q, want %q", gotRelease.AssetURL, release.Assets[0].BrowserDownloadURL)
-			}
-			if gotPath == "" {
-				t.Fatal("UpdateTo received an empty executable path")
-			}
-			return nil
-		},
-	}
-	lister := func(owner, repo string) ([]githubRelease, error) {
-		if owner != "0xJean" || repo != "shellbeam-monitoring-agent" {
-			t.Fatalf("list releases repo = %s/%s, want 0xJean/shellbeam-monitoring-agent", owner, repo)
-		}
-		return []githubRelease{release}, nil
-	}
-
-	if err := checkAndUpdateSnapshot(updater, lister, func() bool { return false }); !errors.Is(err, ErrRestartRequired) {
-		t.Fatalf("checkAndUpdateSnapshot() error = %v, want ErrRestartRequired", err)
-	}
-}
-
 func TestScheduledUpdateStopsAfterRestartRequired(t *testing.T) {
 	ticks := make(chan time.Time, 3)
 	ticks <- time.Now()
@@ -299,14 +233,24 @@ func testRelease(tag string, prerelease, draft bool, publishedAt time.Time, asse
 	}
 }
 
-func TestUpdaterSelectsOnlyPlatformCompatibilityAlias(t *testing.T) {
-	filter := regexp.MustCompile(legacyAssetFilter())
-	if !filter.MatchString(expectedAssetName(runtime.GOOS, runtime.GOARCH)) {
-		t.Fatal("updater rejects compatibility alias")
+func writeExecutable(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0700); err != nil {
+		t.Fatal(err)
 	}
-	for _, asset := range []string{"shellbeam-monitoring-agent-" + runtime.GOOS + "-" + runtime.GOARCH, expectedAssetName(runtime.GOOS, runtime.GOARCH) + ".sha256", "komari-agent-foreign-arch"} {
-		if filter.MatchString(asset) {
-			t.Fatalf("updater accepts unintended asset %q", asset)
-		}
+}
+
+func assertFile(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != content || info.Mode().Perm() != mode {
+		t.Fatalf("%s: content %q mode %o", path, data, info.Mode().Perm())
 	}
 }

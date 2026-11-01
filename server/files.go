@@ -23,6 +23,7 @@ import (
 	pkg_flags "github.com/komari-monitor/komari-agent/cmd/flags"
 	"github.com/komari-monitor/komari-agent/dnsresolver"
 	v2 "github.com/komari-monitor/komari-agent/protocol/v2"
+	"github.com/komari-monitor/komari-agent/utils"
 )
 
 const (
@@ -88,7 +89,8 @@ func runFileOperation(operation v2.FileOperation) v2.FileResult {
 	result := v2.FileResult{UUID: operation.UUID, RequestID: operation.RequestID}
 	payload, err := executeFileOperation(operation)
 	if err != nil {
-		result.Error = err.Error()
+		// Transfer URLs carry credentials and url.Error includes the whole URL.
+		result.Error = utils.RedactSecrets(err.Error())
 		return result
 	}
 	result.OK = true
@@ -97,8 +99,8 @@ func runFileOperation(operation v2.FileOperation) v2.FileResult {
 }
 
 func executeFileOperation(operation v2.FileOperation) (json.RawMessage, error) {
-	if pkg_flags.GlobalConfig.DisableWebSsh {
-		return nil, errors.New("web control is disabled")
+	if refusal := pkg_flags.GlobalConfig.RemoteControlRefusal(); refusal != "" {
+		return nil, errors.New("web control is disabled: " + refusal)
 	}
 	switch operation.Op {
 	case "list":

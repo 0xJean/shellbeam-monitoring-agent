@@ -3,6 +3,7 @@ package terminal
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -50,8 +51,9 @@ var (
 // StartTerminal keeps a PTY alive briefly after its WebSocket drops. A new
 // connection with the same request ID reattaches the existing shell.
 func StartTerminal(conn *websocket.Conn, requestID string) {
-	if flags.DisableWebSsh {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("\n\nWeb SSH is disabled. Enable it by running without the --disable-web-ssh flag."))
+	if refusal := flags.RemoteControlRefusal(); refusal != "" {
+		log.Printf("Refused terminal request: remote control is off: %s", refusal)
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("\n\nWeb SSH is off: "+refusal+"\n"))
 		_ = conn.Close()
 		return
 	}

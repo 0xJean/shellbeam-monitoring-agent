@@ -3,10 +3,12 @@ PYTHON ?= python3
 DIST ?= dist
 AGENT_VERSION ?= 1.5.13
 VERSION_HASH ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
+# Base64 Ed25519 public key trusted for self-update; see docs/update-signing.md.
+UPDATE_PUBLIC_KEY ?=
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 MODULE := github.com/komari-monitor/komari-agent
-LDFLAGS := -s -w -X $(MODULE)/update.CurrentVersion=$(AGENT_VERSION) -X $(MODULE)/update.VersionHash=$(VERSION_HASH)
+LDFLAGS := -s -w -X $(MODULE)/update.CurrentVersion=$(AGENT_VERSION) -X $(MODULE)/update.VersionHash=$(VERSION_HASH) -X $(MODULE)/update.UpdatePublicKey=$(UPDATE_PUBLIC_KEY)
 EXE := $(if $(filter windows,$(GOOS)),.exe,)
 ASSET := komari-agent-$(GOOS)-$(GOARCH)$(EXE)
 BRANDED_ASSET := shellbeam-monitoring-agent-$(GOOS)-$(GOARCH)$(EXE)
@@ -34,7 +36,7 @@ artifacts: build notices
 	cp "$(DIST)/shellbeam-monitoring-agent$(EXE)" "$(DIST)/$(BRANDED_ASSET)"
 	cp readme.md README_zh-cn.md "$(DIST)/"
 	mkdir -p "$(DIST)/docs"
-	cp docs/integration.md docs/releases.md docs/management.md docs/validation.md "$(DIST)/docs/"
+	cp docs/integration.md docs/releases.md docs/management.md docs/validation.md docs/update-signing.md "$(DIST)/docs/"
 
 clean:
 	rm -rf "$(DIST)"

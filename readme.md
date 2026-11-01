@@ -14,7 +14,7 @@ the existing ShellBeam application workspace.
 
 ## Build and identify
 
-Use Go 1.25 or newer, GNU make and Python 3:
+Use Go 1.26 or newer, GNU make and Python 3:
 
 ```sh
 make check build
@@ -49,10 +49,19 @@ chmod 600 /absolute/path/to/agent.json
 ./dist/shellbeam-monitoring-agent --config /absolute/path/to/agent.json
 ```
 
-`disable_web_ssh: true` disables the agent remote-control channel. Set the value
-according to your deployment policy. For App-managed deployments, keep the
-existing generated configuration and service identity rather than creating a
-second service.
+Remote control (web terminal, task commands and file operations) is off by
+default. Opt in with `--enable-remote-control`, `enable_remote_control: true` or
+`AGENT_ENABLE_REMOTE_CONTROL=true`. `disable_web_ssh` / `--disable-web-ssh` stay
+accepted and take precedence. The agent refuses remote control, and logs why,
+when the endpoint is not `https`/`wss` or `ignore_unsafe_cert` is on, except for
+loopback endpoints. Reporting is not affected. For App-managed deployments, keep
+the existing generated configuration and service identity rather than creating
+a second service.
+
+Prefer the JSON file or `AGENT_TOKEN` over `--token`, which is visible in the
+process list. Tokens and credential query parameters are removed from logs.
+Servers read the agent token from the URL query, so it is still sent that way;
+keep access logs on any reverse proxy in mind.
 
 The existing configuration precedence is retained, from lowest to highest:
 defaults, CLI flags, `AGENT_*` environment variables, JSON config. For example,
@@ -71,9 +80,12 @@ promote a binary into the App's trusted feed. Signed promotion, URL allowlisting
 checksums, version pins and live lifecycle acceptance are covered in
 [the integration contract](docs/integration.md).
 
-For standalone use, the self-updater targets this fork's repository. Managed
-and container deployments must keep `disable_auto_update` enabled and use their
-own verified upgrade/rollback flow.
+For standalone use, the self-updater targets this fork's repository. It is off
+by default; opt in with `--enable-auto-update`. Releases must carry an Ed25519
+signature for the public key embedded in the build, otherwise the update is
+refused; see [update signing](docs/update-signing.md). Managed and container
+deployments must keep `disable_auto_update` enabled and use their own verified
+upgrade/rollback flow.
 
 ## Container
 

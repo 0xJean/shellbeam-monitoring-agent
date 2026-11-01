@@ -30,11 +30,12 @@ func NewTask(task_id, command string) {
 		uploadTaskResult(task_id, "No command provided", 0, time.Now())
 		return
 	}
-	if flags.DisableWebSsh {
-		uploadTaskResult(task_id, "Remote control is disabled.", -1, time.Now())
+	if refusal := flags.RemoteControlRefusal(); refusal != "" {
+		log.Printf("Refused task %s: remote control is off: %s", task_id, refusal)
+		uploadTaskResult(task_id, "Remote control is disabled: "+refusal, -1, time.Now())
 		return
 	}
-	log.Printf("Executing task %s with command: %s", task_id, command)
+	log.Printf("Executing task %s", task_id)
 	result, exitCode := runTaskCommand(command)
 	uploadTaskResult(task_id, result, exitCode, time.Now())
 }

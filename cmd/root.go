@@ -20,6 +20,7 @@ import (
 	monitoring "github.com/komari-monitor/komari-agent/monitoring/unit"
 	"github.com/komari-monitor/komari-agent/server"
 	"github.com/komari-monitor/komari-agent/update"
+	"github.com/komari-monitor/komari-agent/utils"
 	"github.com/spf13/cobra"
 
 	pkg_flags "github.com/komari-monitor/komari-agent/cmd/flags"
@@ -57,6 +58,8 @@ var RootCmd = &cobra.Command{
 				return fmt.Errorf("failed to parse config file: %w", err)
 			}
 		}
+		utils.RegisterSecret(flags.Token)
+		utils.RegisterSecret(flags.AutoDiscoveryKey)
 		if flags.PreferIPVersion != "" && flags.PreferIPVersion != "4" && flags.PreferIPVersion != "6" {
 			return fmt.Errorf("invalid --prefer-ip-version value %q: expected 4 or 6", flags.PreferIPVersion)
 		}
@@ -64,6 +67,7 @@ var RootCmd = &cobra.Command{
 		stopCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
+		logRemoteControlState()
 		stopWarning := startSecurityWarning(stopCtx)
 		defer stopWarning()
 		shutdown := newShutdownCoordinator(stopWarning, netstatic.Stop, os.Exit)
@@ -125,7 +129,7 @@ var RootCmd = &cobra.Command{
 			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		}
 		// 自动更新
-		if !flags.DisableAutoUpdate {
+		if flags.AutoUpdateEnabled() {
 			err := update.CheckAndUpdate()
 			if handleUpdateCheckResult(err, shutdown) {
 				return nil
@@ -133,6 +137,8 @@ var RootCmd = &cobra.Command{
 			go update.DoUpdateWorks(func() {
 				shutdown.shutdown(42)
 			})
+		} else {
+			log.Println("Auto-update is off; set --enable-auto-update to opt in")
 		}
 		go server.DoUploadBasicInfoWorks()
 		for {
@@ -140,6 +146,18 @@ var RootCmd = &cobra.Command{
 			server.EstablishWebSocketConnection()
 		}
 	},
+}
+
+func logRemoteControlState() {
+	refusal := flags.RemoteControlRefusal()
+	switch {
+	case refusal == "":
+		log.Println("[warn] remote control is enabled: the server can run commands and access files on this device")
+	case flags.EnableRemoteControl:
+		log.Println("[warn] remote control was requested but is refused:", refusal)
+	default:
+		log.Println("Remote control is off:", refusal)
+	}
 }
 
 func handleUpdateCheckResult(err error, shutdown *shutdownCoordinator) bool {
@@ -154,9 +172,10 @@ func handleUpdateCheckResult(err error, shutdown *shutdownCoordinator) bool {
 }
 
 func Execute() {
+	log.SetOutput(utils.NewRedactingWriter(os.Stderr))
 	for i, arg := range os.Args {
 		if arg == "-autoUpdate" || arg == "--autoUpdate" {
-			log.Println("WARNING: The -autoUpdate flag is deprecated in version 0.0.9 and later. Use --disable-auto-update to configure auto-update behavior.")
+			log.Println("WARNING: The -autoUpdate flag is deprecated in version 0.0.9 and later. Use --enable-auto-update to configure auto-update behavior.")
 			// 从参数列表中移除该参数，防止cobra解析错误
 			os.Args = append(os.Args[:i], os.Args[i+1:]...)
 			break
@@ -182,8 +201,10 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&flags.Endpoint, "endpoint", "e", "", "API endpoint")
 	//RootCmd.MarkPersistentFlagRequired("endpoint")
 	RootCmd.PersistentFlags().StringVar(&flags.AutoDiscoveryKey, "auto-discovery", "", "Auto discovery key for the agent")
-	RootCmd.PersistentFlags().BoolVar(&flags.DisableAutoUpdate, "disable-auto-update", false, "Disable automatic updates")
-	RootCmd.PersistentFlags().BoolVar(&flags.DisableWebSsh, "disable-web-ssh", false, "Disable remote control(web ssh and rce)")
+	RootCmd.PersistentFlags().BoolVar(&flags.DisableAutoUpdate, "disable-auto-update", false, "Disable automatic updates; takes precedence over --enable-auto-update")
+	RootCmd.PersistentFlags().BoolVar(&flags.EnableAutoUpdate, "enable-auto-update", false, "Enable automatic updates; releases must be signed for the key embedded in this build")
+	RootCmd.PersistentFlags().BoolVar(&flags.DisableWebSsh, "disable-web-ssh", false, "Disable remote control(web ssh and rce); takes precedence over --enable-remote-control")
+	RootCmd.PersistentFlags().BoolVar(&flags.EnableRemoteControl, "enable-remote-control", false, "Enable remote control(web ssh and rce); requires a TLS endpoint with certificate verification, except on loopback")
 	//RootCmd.PersistentFlags().BoolVar(&flags.MemoryModeAvailable, "memory-mode-available", false, "[deprecated]Report memory as available instead of used.")
 	RootCmd.PersistentFlags().Float64VarP(&flags.Interval, "interval", "i", 3.0, "Interval in seconds")
 	RootCmd.PersistentFlags().BoolVarP(&flags.IgnoreUnsafeCert, "ignore-unsafe-cert", "u", false, "Ignore unsafe certificate errors")

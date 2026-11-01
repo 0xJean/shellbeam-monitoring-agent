@@ -1,9 +1,17 @@
 package flags_pkg
 
+import (
+	"net"
+	"net/url"
+	"strings"
+)
+
 type Config struct {
 	AutoDiscoveryKey    string  `json:"auto_discovery_key" env:"AGENT_AUTO_DISCOVERY_KEY"`         // 自动发现密钥
 	DisableAutoUpdate   bool    `json:"disable_auto_update" env:"AGENT_DISABLE_AUTO_UPDATE"`       // 禁用自动更新
+	EnableAutoUpdate    bool    `json:"enable_auto_update" env:"AGENT_ENABLE_AUTO_UPDATE"`         // 启用自动更新（默认关闭，禁用优先）
 	DisableWebSsh       bool    `json:"disable_web_ssh" env:"AGENT_DISABLE_WEB_SSH"`               // 禁用远程控制（web ssh 和 rce）
+	EnableRemoteControl bool    `json:"enable_remote_control" env:"AGENT_ENABLE_REMOTE_CONTROL"`   // 启用远程控制（默认关闭，禁用优先）
 	MemoryModeAvailable bool    `json:"memory_mode_available" env:"AGENT_MEMORY_MODE_AVAILABLE"`   // [deprecated] 已弃用，请使用 MemoryIncludeCache
 	Token               string  `json:"token" env:"AGENT_TOKEN"`                                   // Token
 	Endpoint            string  `json:"endpoint" env:"AGENT_ENDPOINT"`                             // 面板地址
@@ -32,3 +40,48 @@ type Config struct {
 }
 
 var GlobalConfig = &Config{}
+
+// AutoUpdateEnabled reports the operator's choice; --disable-auto-update wins.
+func (c *Config) AutoUpdateEnabled() bool {
+	return c.EnableAutoUpdate && !c.DisableAutoUpdate
+}
+
+// RemoteControlEnabled reports whether commands, terminals and file operations
+// from the server may run.
+func (c *Config) RemoteControlEnabled() bool {
+	return c.RemoteControlRefusal() == ""
+}
+
+// RemoteControlRefusal explains why remote control is off, or returns "" when
+// it is allowed. It is off unless requested, and refused on a connection that
+// cannot authenticate the server, since that server could then run commands.
+func (c *Config) RemoteControlRefusal() string {
+	if c.DisableWebSsh {
+		return "disabled by disable_web_ssh"
+	}
+	if !c.EnableRemoteControl {
+		return "not enabled; set --enable-remote-control to opt in"
+	}
+	endpoint, err := url.Parse(strings.TrimSpace(c.Endpoint))
+	if err != nil || endpoint.Hostname() == "" {
+		return "the endpoint is not a valid URL"
+	}
+	if c.isLoopback(endpoint.Hostname()) {
+		return ""
+	}
+	if endpoint.Scheme != "https" && endpoint.Scheme != "wss" {
+		return "the endpoint does not use TLS (https or wss)"
+	}
+	if c.IgnoreUnsafeCert {
+		return "ignore_unsafe_cert turns off server certificate verification"
+	}
+	return ""
+}
+
+func (c *Config) isLoopback(host string) bool {
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	// A custom DNS server could answer anything for this name.
+	return strings.EqualFold(host, "localhost") && c.CustomDNS == ""
+}
