@@ -92,3 +92,19 @@ func TestExplicitFalseIsNotOptIn(t *testing.T) {
 		t.Fatalf("explicit false enabled a feature: %+v", c)
 	}
 }
+
+func TestAllowPrivatePingTargetsIsOptIn(t *testing.T) {
+	var c Config
+	if err := json.Unmarshal([]byte(`{"endpoint":"https://panel.example","token":"t"}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.AllowPrivatePingTargets {
+		t.Fatal("private ping targets must be off by default")
+	}
+	if err := json.Unmarshal([]byte(`{"allow_private_ping_targets":true}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.AllowPrivatePingTargets {
+		t.Fatal("config key not honoured")
+	}
+}

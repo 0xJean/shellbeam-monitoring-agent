@@ -100,12 +100,18 @@ func saveAutoDiscoveryConfigTo(configPath string, config *AutoDiscoveryConfig) e
 
 // writeFileAtomicPrivate never exposes the token: os.CreateTemp creates the file
 // as 0600 and the rename replaces any previous file (and any symlink) at once.
+// Windows ignores those bits, so there the file gets a private ACL before the
+// token is written, and the write fails if it cannot.
 func writeFileAtomicPrivate(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".auto-discovery-*.tmp")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
+	if err := restrictFileACL(tmp.Name()); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		return err
@@ -127,9 +133,6 @@ func writeFileAtomicPrivate(path string, data []byte) error {
 // tightenAutoDiscoveryFile repairs files written 0644 by earlier versions. A
 // failure is only logged so an existing deployment keeps reporting.
 func tightenAutoDiscoveryFile(path string) {
-	if runtime.GOOS == "windows" {
-		return
-	}
 	info, err := os.Lstat(path)
 	if err != nil {
 		log.Printf("Failed to check auto-discovery config permissions: %v", err)
@@ -137,6 +140,12 @@ func tightenAutoDiscoveryFile(path string) {
 	}
 	if !info.Mode().IsRegular() {
 		log.Printf("[warn] auto-discovery config %s is not a regular file; permissions left unchanged", path)
+		return
+	}
+	if runtime.GOOS == "windows" {
+		if err := restrictFileACL(path); err != nil {
+			log.Printf("[warn] could not restrict auto-discovery config ACL: %v", err)
+		}
 		return
 	}
 	if info.Mode().Perm()&0077 == 0 {

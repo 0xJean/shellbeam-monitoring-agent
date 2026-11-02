@@ -53,6 +53,12 @@ chmod 600 /absolute/path/to/agent.json
 或开启了 `ignore_unsafe_cert` 时（回环地址除外），探针会拒绝远程控制并记录原因；
 数据上报不受影响。
 
+服务端下发的 Ping 任务（`icmp`、`tcp`、`http`）在解析结果为回环、私有（RFC1918、IPv6
+唯一本地）、CGNAT、链路本地、云元数据、组播或保留地址时会被拒绝，并像目标不可达一样上报失败，
+首次拒绝只记录一次日志。HTTP Ping 不跟随重定向，3xx 响应视为可达。如需监控内网主机，可通过
+`--allow-private-ping-targets`、`allow_private_ping_targets: true` 或
+`AGENT_ALLOW_PRIVATE_PING_TARGETS=true` 启用。Agent 与面板之间的连接不受影响。
+
 请优先使用 JSON 文件或 `AGENT_TOKEN`，`--token` 会出现在进程列表中。日志中的 token
 和凭据查询参数会被移除。服务端仍从 URL 查询参数读取 token，请留意反向代理的访问日志。
 App 托管部署应继续使用现有管理器生成的配置和服务，不要另起重复服务。
