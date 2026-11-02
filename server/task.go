@@ -135,7 +135,7 @@ func resolveIP(target string) (string, error) {
 		return target, nil
 	}
 	// 解析域名到 IP
-	addrs, err := net.LookupHost(target)
+	addrs, err := lookupPingHost(target)
 	if err != nil || len(addrs) == 0 {
 		return "", errors.New("failed to resolve target")
 	}
@@ -154,6 +154,10 @@ func icmpPing(target string, timeout time.Duration) (int64, error) {
 	// 先解析 IP 地址
 	ip, err := resolveIP(host)
 	if err != nil {
+		return -1, err
+	}
+
+	if err := checkPingAddress(ip); err != nil {
 		return -1, err
 	}
 
@@ -191,9 +195,8 @@ func tcpPing(target string, timeout time.Duration) (int64, error) {
 		return -1, err
 	}
 
-	targetAddr := net.JoinHostPort(ip, port)
 	start := time.Now()
-	conn, err := net.DialTimeout("tcp", targetAddr, timeout)
+	conn, err := dialPingTarget(context.Background(), "tcp", ip, port, timeout)
 	if err != nil {
 		return -1, err
 	}
@@ -222,11 +225,7 @@ func httpPing(target string, timeout time.Duration) (int64, error) {
 			if err != nil {
 				return nil, err
 			}
-			ip, err := resolveIP(host)
-			if err != nil {
-				return nil, err
-			}
-			return net.DialTimeout(network, net.JoinHostPort(ip, port), timeout)
+			return dialPingTarget(ctx, network, host, port, timeout)
 		},
 	}
 	defer transport.CloseIdleConnections()
@@ -234,6 +233,11 @@ func httpPing(target string, timeout time.Duration) (int64, error) {
 	client := &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
+		// A redirect is an answer from the target; following it would let the
+		// target choose a second request, so the 3xx itself is the result.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 	start := time.Now()
 	resp, err := client.Get(target)
@@ -301,7 +305,10 @@ func NewPingTask(conn *ws.SafeConn, taskID uint, pingType, pingTarget string) {
 	}
 
 	if err != nil {
-		log.Printf("Ping task %d failed: %v", taskID, err)
+		// Refusals are logged once by the guard; a server can repeat them at will.
+		if !errors.Is(err, errPingTargetRefused) {
+			log.Printf("Ping task %d failed: %v", taskID, err)
+		}
 		pingResult = -1 // 如果有错误，设置结果为 -1
 	} else {
 		pingResult = int(latency)

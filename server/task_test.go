@@ -16,6 +16,7 @@ func TestICMPPing(t *testing.T) {
 	if os.Getenv("SHELLBEAM_TEST_RAW_ICMP") != "1" {
 		t.Skip("set SHELLBEAM_TEST_RAW_ICMP=1 in a fixture with raw-socket permission")
 	}
+	allowPrivatePingTargets(t)
 	for _, target := range []string{"127.0.0.1", "127.0.0.1:80"} {
 		latency, err := icmpPing(target, time.Second)
 		if err != nil || latency < 0 {
@@ -25,6 +26,7 @@ func TestICMPPing(t *testing.T) {
 }
 
 func TestTCPPing(t *testing.T) {
+	allowPrivatePingTargets(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +47,7 @@ func TestTCPPing(t *testing.T) {
 }
 
 func TestHTTPPing(t *testing.T) {
+	allowPrivatePingTargets(t)
 	for _, status := range []int{http.StatusOK, http.StatusNoContent, http.StatusServiceUnavailable} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(status) }))

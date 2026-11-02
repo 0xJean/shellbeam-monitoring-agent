@@ -58,6 +58,15 @@ loopback endpoints. Reporting is not affected. For App-managed deployments, keep
 the existing generated configuration and service identity rather than creating
 a second service.
 
+Server ping tasks (`icmp`, `tcp`, `http`) are refused, and reported as failed like
+an unreachable target, when the resolved address is loopback, private (RFC1918,
+IPv6 unique local), CGNAT, link-local, cloud metadata, multicast or reserved. The
+first refusal is logged once. HTTP pings do not follow redirects; a 3xx answer
+counts as reachable. To monitor internal hosts, opt in with
+`--allow-private-ping-targets`, `allow_private_ping_targets: true` or
+`AGENT_ALLOW_PRIVATE_PING_TARGETS=true`. The agent's own connection to the
+dashboard is not affected.
+
 Prefer the JSON file or `AGENT_TOKEN` over `--token`, which is visible in the
 process list. Tokens and credential query parameters are removed from logs.
 Servers read the agent token from the URL query, so it is still sent that way;
